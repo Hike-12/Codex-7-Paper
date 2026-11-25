@@ -1,4 +1,4 @@
-import { COLS, ROWS, PAPER_H, PAPER_W, project } from './PaperPhysics'
+import { COLS, ROWS, PAPER_H, PAPER_W, NODE_COUNT, project } from './PaperPhysics'
 import type { PaperPhysics, Point } from './PaperPhysics'
 import { makeCanvas, PaperTexture, seeded } from './PaperTexture'
 import { stocks } from './sheet'
@@ -14,14 +14,17 @@ const vertexSource = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 position;
 layout(location=1) in vec2 uv;
+layout(location=2) in vec3 smoothNormal;
 uniform vec4 view;
 uniform vec2 lens;
 uniform float shadow;
 out vec3 vPosition;
 out vec2 vUV;
+out vec3 vNormal;
 void main() {
   vPosition = position;
   vUV = uv;
+  vNormal = smoothNormal;
   vec2 p = shadow > 0.0
     ? position.xy + vec2(3.0, 7.0) + position.z * vec2(0.23, 0.49) + lens
     : position.xy + position.z * vec2(0.13, -0.24);
@@ -34,6 +37,7 @@ const fragmentSource = `#version 300 es
 precision highp float;
 in vec3 vPosition;
 in vec2 vUV;
+in vec3 vNormal;
 uniform sampler2D paper;
 uniform float opacity;
 uniform float shadow;
@@ -46,7 +50,10 @@ void main() {
   }
   vec3 ink = texture(paper, vUV).rgb;
   vec3 area = cross(dFdx(vPosition), dFdy(vPosition));
-  vec3 normal = area / max(length(area), 0.00001);
+  vec3 facet = area / max(length(area), 0.00001);
+  vec3 blendedNormal = vNormal / max(length(vNormal), 0.00001);
+  vec3 orientedFacet = gl_FrontFacing ? facet : -facet;
+  vec3 normal = normalize(mix(blendedNormal, orientedFacet, 0.13 + wadded * 0.87));
   normal *= normal.z < 0.0 ? -1.0 : 1.0;
   vec3 light = normalize(vec3(-0.55, -0.76, 0.75));
   float diffuse = dot(light, normal);
@@ -54,7 +61,7 @@ void main() {
   float fold = clamp(length(normal.xy) * 2.0, 0.0, 1.0);
   float relief = max(fold, wadded * 0.64);
   vec3 lit = ink * (1.0 + relief * (0.77 * diffuse - 0.37));
-  lit += relief * grazing * vec3(0.105, 0.094, 0.074);
+  lit += relief * grazing * vec3(0.157, 0.138, 0.110);
   if (gl_FrontFacing) {
     float grey = dot(ink, vec3(0.33, 0.43, 0.24));
     lit = mix(lit * 0.45, vec3(grey * 0.48 + 0.1, grey * 0.45 + 0.092, grey * 0.43 + 0.078), 0.66);
@@ -94,6 +101,7 @@ class MeshLayer {
   private topology = -1
   private indices = new Uint16Array(0)
   private vertices = new Float32Array(0)
+  private normals = new Float32Array(NODE_COUNT * 3)
   private fibers: { a: number; b: number; pos: number; scale: number; du: number; dv: number }[] = []
 
   constructor(private mesh: PaperPhysics) {
@@ -109,9 +117,11 @@ class MeshLayer {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
     gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0)
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 32, 0)
     gl.enableVertexAttribArray(1)
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12)
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 12)
+    gl.enableVertexAttribArray(2)
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 32, 20)
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.texture)
@@ -163,11 +173,31 @@ class MeshLayer {
         next += 3
       }
     }
-    this.vertices = new Float32Array(next * 5)
+    this.vertices = new Float32Array(next * 8)
     this.indices = new Uint16Array(indices)
     this.topology = this.mesh.topology
     const gl = this.gl!
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.STATIC_DRAW)
+  }
+
+  private updateNormals() {
+    const normals = this.normals
+    const nodes = this.mesh.nodes
+    normals.fill(0)
+    if (this.mesh.wadded) return
+    for (const triangle of this.mesh.triangles) {
+      if (triangle.dead) continue
+      const [a, b, c] = triangle.ids
+      const p = nodes[a].p, q = nodes[b].p, r = nodes[c].p
+      const x = q[0] - p[0], y = q[1] - p[1], z = q[2] - p[2]
+      const u = r[0] - p[0], v = r[1] - p[1], w = r[2] - p[2]
+      const nx = y * w - z * v, ny = z * u - x * w, nz = x * v - y * u
+      for (const id of triangle.ids) {
+        normals[id * 3] += nx
+        normals[id * 3 + 1] += ny
+        normals[id * 3 + 2] += nz
+      }
+    }
   }
 
   render(camera: Camera, width: number, height: number, opacity: number, shadows: boolean) {
@@ -178,13 +208,18 @@ class MeshLayer {
       this.canvas.height = height
     }
     if (this.topology !== this.mesh.topology) this.rebuild()
+    this.updateNormals()
     let i = 0
+    let nIndex = 0
     for (const n of this.mesh.nodes) {
       this.vertices[i++] = n.p[0]
       this.vertices[i++] = n.p[1]
       this.vertices[i++] = n.p[2]
       this.vertices[i++] = n.rest[0] / PAPER_W + 0.5
       this.vertices[i++] = n.rest[1] / PAPER_H + 0.5
+      this.vertices[i++] = this.normals[nIndex++]
+      this.vertices[i++] = this.normals[nIndex++]
+      this.vertices[i++] = this.normals[nIndex++]
     }
     for (const fiber of this.fibers) {
       const a = this.mesh.nodes[fiber.a]
@@ -195,6 +230,10 @@ class MeshLayer {
       this.vertices[i++] = a.p[2] + (b.p[2] - a.p[2]) * t + Math.abs(fiber.scale)
       this.vertices[i++] = (a.rest[0] + (b.rest[0] - a.rest[0]) * t + fiber.du) / PAPER_W + 0.5
       this.vertices[i++] = (a.rest[1] + (b.rest[1] - a.rest[1]) * t + fiber.dv) / PAPER_H + 0.5
+      for (let axis = 0; axis < 3; axis++) {
+        const v = this.normals[fiber.a * 3 + axis]
+        this.vertices[i++] = v + (this.normals[fiber.b * 3 + axis] - v) * t
+      }
     }
     gl.viewport(0, 0, width, height)
     gl.clearColor(0, 0, 0, 0)

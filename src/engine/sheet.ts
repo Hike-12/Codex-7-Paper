@@ -1,5 +1,5 @@
 export const stocks = {
-  cotton: { name: 'Obsidian Cotton', weight: '320 gsm', base: '#222225', ink: '#f4f4f0', dim: '#a9a5a2', accent: '#ff683e', opacity: 1 },
+  cotton: { name: 'Obsidian Cotton', weight: '320 gsm', base: '#161618', ink: '#f4f4f0', dim: '#a9a5a2', accent: '#ff683e', opacity: 1 },
   kraft: { name: 'Warm Kraft', weight: '180 gsm', base: '#eae2d3', ink: '#141413', dim: '#59554b', accent: '#a72e1e', opacity: 1 },
   cyanotype: { name: 'Cyanotype Blueprint', weight: '250 gsm', base: '#0f294a', ink: '#f0f6ff', dim: '#a5bdd0', accent: '#ff9866', opacity: 1 },
   vellum: { name: 'Tracing Vellum', weight: '110 gsm', base: '#d8d6cc', ink: '#17191d', dim: '#44474d', accent: '#a42c22', opacity: 0.76 },
@@ -30,7 +30,7 @@ export const defaultSecret = 'Everything you fold\nleaves a trace.'
 const sheetBlocks: Record<Template, InkBlock[]> = {
   manifesto: [
     { id: 'title-1', u: 0.072, v: 0.365, text: 'Paper has', font: 'Serif', size: 145 },
-    { id: 'title-2', u: 0.069, v: 0.615, text: 'a memory.', font: 'Italic', size: 152 },
+    { id: 'title-2', u: 0.069, v: 0.615, text: 'a memory.', font: 'Italic', size: 145 },
     { id: 'caption', u: 0.079, v: 0.775, text: 'A crease records the pressure.\nA tear records the direction.', font: 'Sans', size: 15 },
   ],
   classified: [

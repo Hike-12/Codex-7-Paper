@@ -155,7 +155,6 @@ export class PaperPhysics {
 
   hit(point: Point) {
     let match: { u: number; v: number; z: number; nearest: number } | undefined
-    const skip = this.wadded ? 0 : -1
     for (const t of this.triangles) {
       if (t.dead) continue
       const [a, b, c] = t.ids.map(id => this.nodes[id])
@@ -171,7 +170,7 @@ export class PaperPhysics {
       const x = a.rest[0] * w1 + b.rest[0] * w2 + c.rest[0] * w3
       const y = a.rest[1] * w1 + b.rest[1] * w2 + c.rest[1] * w3
       match = { u: x / PAPER_W + 0.5, v: y / PAPER_H + 0.5, z,
-        nearest: skip === 0 ? 0 : t.ids[w1 > w2 && w1 > w3 ? 0 : w2 > w3 ? 1 : 2] }
+        nearest: t.ids[w1 > w2 && w1 > w3 ? 0 : w2 > w3 ? 1 : 2] }
     }
     return match
   }
@@ -253,6 +252,7 @@ export class PaperPhysics {
   iron() {
     this.wadded = false
     this.release()
+    for (const node of this.nodes) node.old = [...node.p]
     this.ironing = 65
     this.setGravity('pins')
   }
@@ -321,7 +321,7 @@ export class PaperPhysics {
     const nx = dx / distance
     const ny = dy / distance
     const radius = clamp(18 + distance * 0.095, 19, 48)
-    const fold = distance * 0.54
+    const fold = distance * 0.57
     const nearby = clamp(distance + 74, 95, 425)
     for (const node of this.nodes) {
       if (node.pinned || node.attached !== anchor.attached) continue
@@ -337,7 +337,7 @@ export class PaperPhysics {
       const arc = Math.min(Math.PI, Math.max(0, q / radius))
       const turned = q > radius * Math.PI ? q - radius * Math.PI : radius * Math.sin(arc)
       const rolled = crease - turned * Math.cos(arc)
-      const strength = (node === anchor ? 0.67 : 0.48 * focus + 0.11) * (grab.edge ? 1 : 0.73)
+      const strength = (node === anchor ? 0.61 : 0.46 * focus + 0.11) * (grab.edge ? 1 : 0.73)
       const displacement = grab.edge ? rolled - along : dx * nx * focus * 0.48 + dy * ny * focus * 0.48
       node.p[0] = mix(node.p[0], node.rest[0] + displacement * nx, strength)
       node.p[1] = mix(node.p[1], node.rest[1] + displacement * ny, strength)

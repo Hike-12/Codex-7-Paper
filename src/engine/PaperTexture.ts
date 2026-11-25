@@ -26,6 +26,7 @@ function grain(stock: Stock) {
   const red = hex >> 16
   const green = hex >> 8 & 255
   const blue = hex & 255
+  const exposure = stock === 'cotton' ? 15 : 5
   const layers = [17, 39, 95, 207].map((step, i) => {
     const stride = Math.ceil(canvas.width / step) + 2
     const points = Float32Array.from({ length: stride * (Math.ceil(canvas.height / step) + 2) }, random)
@@ -39,7 +40,7 @@ function grain(stock: Stock) {
       return { ...layer, offset: row * layer.stride, blend: fraction * fraction * (3 - 2 * fraction) }
     })
     for (let x = 0; x < canvas.width; x++) {
-      let shade = (random() - 0.5) * 22 + 5 - 12 * (x / canvas.width * 0.52 + y / canvas.height * 0.48)
+      let shade = (random() - 0.5) * 19 + exposure - 12 * (x / canvas.width * 0.52 + y / canvas.height * 0.48)
       for (const row of rows) {
         const position = x / row.step
         const col = Math.floor(position)
@@ -115,7 +116,6 @@ function drawInk(ctx: CanvasRenderingContext2D, block: InkBlock, ink: string, ac
     ctx.globalCompositeOperation = 'destination-out'
     for (let i = 0; i < width * 2; i++) {
       ctx.globalAlpha = random() * 0.25
-      ctx.clearRect(0, 0, 0, 0)
       ctx.fillRect(-6 + random() * (width + 12), -block.size + random() * block.size * 1.4, 0.4 + random() * 1.5, 0.4 + random())
     }
   } else {
