@@ -157,8 +157,10 @@ export class PaperPhysics {
     let match: { u: number; v: number; z: number; nearest: number } | undefined
     for (const t of this.triangles) {
       if (t.dead) continue
-      const [a, b, c] = t.ids.map(id => this.nodes[id])
-      const [pa, pb, pc] = [project(a.p), project(b.p), project(c.p)]
+      const a = this.nodes[t.ids[0]], b = this.nodes[t.ids[1]], c = this.nodes[t.ids[2]]
+      const pa = project(a.p), pb = project(b.p), pc = project(c.p)
+      if (point.x < Math.min(pa.x, pb.x, pc.x) || point.x > Math.max(pa.x, pb.x, pc.x) ||
+          point.y < Math.min(pa.y, pb.y, pc.y) || point.y > Math.max(pa.y, pb.y, pc.y)) continue
       const area = cross(pa, pb, pc)
       if (Math.abs(area) < 0.001) continue
       const w1 = cross(point, pb, pc) / area

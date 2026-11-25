@@ -14,7 +14,7 @@ import type { StudioState } from './utils/exportShare'
 const tools = [
   { key: 'peel', label: 'Peel', help: 'Drag a corner to lift the sheet. Double-click an edge for a quick peel.' },
   { key: 'rip', label: 'Rip', help: 'Drag the blade across the sheet. Cut past an edge to free a piece.' },
-  { key: 'type', label: 'Type & stamp', help: 'Choose Add text or click a spot on the sheet. Click existing text to edit it.' },
+  { key: 'type', label: 'Type & stamp', help: 'Click a blank spot to add text, or click existing text to edit it.' },
   { key: 'wad', label: 'Crumple', help: 'Click the sheet to crumple it. Drag and release to toss the ball.' },
 ] as const
 type Tool = typeof tools[number]['key']
@@ -81,7 +81,6 @@ export function App() {
   const [sound, setSound] = useState(false)
   const [menu, setMenu] = useState<Menu>()
   const [editor, setEditor] = useState<InkBlock>()
-  const [placingText, setPlacingText] = useState(false)
   const [underNote, setUnderNote] = useState<string>()
   const [stamp, setStamp] = useState<string>()
   const [customStamp, setCustomStamp] = useState<string>()
@@ -92,6 +91,8 @@ export function App() {
   const [toast, setToast] = useState(initial.warning)
   const [fatal, setFatal] = useState('')
   const canvas = useRef<HTMLCanvasElement>(null)
+  const inkCue = useRef<HTMLDivElement>(null)
+  const hoverFrame = useRef(0)
   const runtime = useRef<Runtime>(null)
   const current = useRef(sheet)
   const gesture = useRef<Gesture>(undefined)
@@ -159,6 +160,7 @@ export function App() {
     return () => {
       disposed = true
       cancelAnimationFrame(frame)
+      cancelAnimationFrame(hoverFrame.current)
       observer.disconnect()
       renderer.dispose()
       audio.dispose()
@@ -199,7 +201,6 @@ export function App() {
     setWadded(state.mesh.wadded)
     showSheet(state.sheet)
     setEditor(undefined)
-    setPlacingText(false)
     setStamp(undefined)
   }
 
@@ -230,7 +231,6 @@ export function App() {
     setTool(next)
     setMenu(undefined)
     setStamp(undefined)
-    setPlacingText(false)
     if (next !== 'type') setEditor(undefined)
   }
 
@@ -239,16 +239,44 @@ export function App() {
     return runtime.current!.renderer.world({ x: event.clientX - rect.left, y: event.clientY - rect.top })
   }
 
-  function addText() {
-    setMenu(undefined)
-    setStamp(undefined)
-    setPlacingText(value => !value)
-    canvas.current?.focus({ preventScroll: true })
+  function inkAt(live: Runtime, u: number, v: number) {
+    const blocks = current.current.blocks
+    const context = live.renderer.texture.inkContext
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (blockAt(blocks[i], u, v, context)) return blocks[i]
+    }
+    return undefined
+  }
+
+  function hideInkCue() {
+    cancelAnimationFrame(hoverFrame.current)
+    inkCue.current?.removeAttribute('data-action')
+  }
+
+  function hoverInk(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!inkCue.current || event.pointerType === 'touch' || event.buttons !== 0) return
+    const { clientX, clientY } = event
+    cancelAnimationFrame(hoverFrame.current)
+    hoverFrame.current = requestAnimationFrame(() => {
+      const cue = inkCue.current
+      const live = runtime.current
+      const element = canvas.current
+      if (!cue || !live || !element) return
+      const rect = element.getBoundingClientRect()
+      const point = { x: clientX - rect.left, y: clientY - rect.top }
+      const hit = live.mesh.hit(live.renderer.world(point))
+      if (!hit) {
+        cue.removeAttribute('data-action')
+        return
+      }
+      cue.dataset.action = inkAt(live, hit.u, hit.v) ? 'edit' : 'add'
+      cue.style.left = `${Math.max(8, Math.min(point.x + 15, rect.width - 106))}px`
+      cue.style.top = `${Math.max(8, Math.min(point.y + 18, rect.height - 36))}px`
+    })
   }
 
   function editInk(block: InkBlock) {
     setMenu(undefined)
-    setPlacingText(false)
     setStamp(undefined)
     setEditor({ ...block })
   }
@@ -268,9 +296,8 @@ export function App() {
       live.audio.stamp()
       return
     }
-    const existing = !placingText && [...current.current.blocks].reverse().find(block => blockAt(block, u, v, live.renderer.texture.inkContext))
+    const existing = inkAt(live, u, v)
     if (existing) { editInk(existing); return }
-    setPlacingText(false)
     setEditor({ id: crypto.randomUUID(), u, v: Math.max(0.035, v), font: 'Serif', size: 37, text: '' })
   }
 
@@ -318,7 +345,8 @@ export function App() {
   function pointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     const active = gesture.current
     const live = runtime.current
-    if (!active || event.pointerId !== active.pointer || !live) return
+    if (!active) { hoverInk(event); return }
+    if (event.pointerId !== active.pointer || !live) return
     const samples = event.nativeEvent.getCoalescedEvents?.()
     for (const sample of samples?.length ? samples : [event]) {
       const point = world(sample)
@@ -455,7 +483,6 @@ export function App() {
       if (event.key === 'Escape') {
         if (menu) { setMenu(undefined); return }
         setEditor(undefined); setUnderNote(undefined); setMenu(undefined); setCopyField(undefined); setCustomStamp(undefined)
-        setPlacingText(false)
         return
       }
       if (menu || event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return
@@ -482,8 +509,8 @@ export function App() {
   const help = wadded && (tool === 'wad' || tool === 'peel')
     ? 'Drag the ball and release to toss it. Iron it out to recover the sheet.'
     : stamp && tool === 'type' ? `Press the paper to apply “${stamp}”.`
-      : placingText ? `${touch ? 'Tap' : 'Click'} a spot on the sheet for your text.`
       : tool === 'peel' ? `Drag a corner to lift the sheet. ${press} an edge for a quick peel.`
+        : tool === 'type' && touch ? 'Tap a blank spot to add text, or tap existing text to edit it.'
         : tools.find(item => item.key === tool)!.help
 
   return <main className="studio">
@@ -530,8 +557,11 @@ export function App() {
     <section className="stage" aria-label="Drafting desk">
       <canvas ref={canvas} className={`desk-canvas tool-${tool} ${dragging ? 'dragging' : ''}`} tabIndex={0}
         aria-label={`${templates[sheet.template]} on ${stock.name}. ${help}`}
-        onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}
+        onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerLeave={hideInkCue} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}
         onLostPointerCapture={pointerEnd} onDoubleClick={previewCorner} />
+      {tool === 'type' && !stamp && !editor && !underNote && !menu && <div ref={inkCue} className="ink-cue" aria-hidden="true">
+        <Icon name="type" size={14} /><span className="ink-cue-add">Add text</span><span className="ink-cue-edit">Edit text</span>
+      </div>}
       <div className="desk-caption" aria-hidden="true"><i />DRAFTING MAT</div>
       {fatal && <div className="canvas-error" role="alert">{fatal}</div>}
       {recording && <div className="record-flag" key={recordStart.current} role="status"><i /> Recording • 5 sec<span /></div>}
@@ -564,8 +594,8 @@ export function App() {
             <button className={`control ${stamp ? 'active-control' : ''}`} aria-label="Choose a stamp" title="Choose a stamp" aria-expanded={menu === 'stamp'} onClick={() => openMenu('stamp')}><Icon name="stamp" /><span>{stamp || 'Stamp'}</span><Icon name="chevron" size={12} /></button>
             {menu === 'stamp' && <Options label="Ink stamps" className="up-menu right-menu">
               {[...stamps, new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: 'short', day: '2-digit' }).format(new Date()).toUpperCase()].map(item =>
-                <button className="option" key={item} onClick={() => { setStamp(item); setPlacingText(false); setMenu(undefined); setEditor(undefined) }}>{item}</button>)}
-              <button className="option" onClick={() => { setCustomStamp(''); setPlacingText(false); setMenu(undefined) }}>Custom stamp</button>
+                <button className="option" key={item} onClick={() => { setStamp(item); setMenu(undefined); setEditor(undefined) }}>{item}</button>)}
+              <button className="option" onClick={() => { setCustomStamp(''); setMenu(undefined) }}>Custom stamp</button>
               {stamp && <button className="option" onClick={() => { setStamp(undefined); setMenu(undefined) }}>Return to type</button>}
             </Options>}
           </div>}
@@ -574,20 +604,15 @@ export function App() {
         </div>
       </div>
       <div className="readout">
-        {tool === 'type' && <div className="type-controls">
-          <button className="control add-text" aria-pressed={placingText} onClick={addText}><Icon name="type" size={15} />Add text</button>
-          <div className="menu-anchor" data-menu="ink">
-            <button className="control" aria-expanded={menu === 'ink'} disabled={!sheet.blocks.length} onClick={() => openMenu('ink')}>
-              Edit text<Icon name="chevron" size={13} />
-            </button>
-            {menu === 'ink' && <Options label="Text on this sheet" className="up-menu">
-              {sheet.blocks.map(block => <button type="button" className="option ink-option" key={block.id} onClick={() => editInk(block)}>
-                <Icon name={block.stamp ? 'stamp' : 'type'} size={15} /><span>{block.text.replace(/\s+/g, ' ').trim()}</span>
-              </button>)}
-            </Options>}
-          </div>
-        </div>}
         <p>{help}</p>
+        {tool === 'type' && !stamp && sheet.blocks.length > 0 && <div className="menu-anchor ink-menu" data-menu="ink">
+          <button className="ink-link" aria-expanded={menu === 'ink'} onClick={() => openMenu('ink')}>Text list</button>
+          {menu === 'ink' && <Options label="Text on this sheet" className="up-menu">
+            {sheet.blocks.map(block => <button type="button" className="option ink-option" key={block.id} onClick={() => editInk(block)}>
+              <Icon name={block.stamp ? 'stamp' : 'type'} size={15} /><span>{block.text.replace(/\s+/g, ' ').trim()}</span>
+            </button>)}
+          </Options>}
+        </div>}
       </div>
     </footer>
 
