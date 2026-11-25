@@ -435,7 +435,9 @@ export function App() {
           )}</Options>}
         </div>
         <div className="menu-anchor">
-          <button className="control" aria-label="Templates" aria-expanded={menu === 'template'} onClick={() => openMenu('template')}><Icon name="template" /><span>Templates</span><Icon name="chevron" size={13} /></button>
+          <button className="control" aria-label="Templates" aria-describedby="template-hint" aria-expanded={menu === 'template'} onClick={() => openMenu('template')}>
+            <Icon name="template" /><span className="template-label">Templates<small id="template-hint">Start a new sheet</small></span><Icon name="chevron" size={13} />
+          </button>
           {menu === 'template' && <Options label="Starter sheets">{(Object.entries(templates) as [Template, string][]).map(([key, name], i) =>
             <button key={key} className="option" aria-pressed={sheet.template === key} onClick={() => reset(key)}><small className="option-number">0{i + 1}</small><span>{name}</span></button>
           )}</Options>}
@@ -460,7 +462,7 @@ export function App() {
         aria-label={`${templates[sheet.template]} on ${stock.name}. ${help}`}
         onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}
         onLostPointerCapture={pointerEnd} onDoubleClick={previewCorner} />
-      <div className="desk-caption" aria-hidden="true"><i />DRAFTING MAT<span>TS / 07</span></div>
+      <div className="desk-caption" aria-hidden="true"><i />DRAFTING MAT</div>
       {fatal && <div className="canvas-error" role="alert">{fatal}</div>}
       {recording && <div className="record-flag" key={recordStart.current} role="status"><i /> Recording • 5 sec<span /></div>}
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -502,7 +504,6 @@ export function App() {
         </div>
       </div>
       <div className="readout">
-        <span className="day-label">DAY <b>07</b> / 30</span>
         <p>{help}</p>
         <span className="mesh-label">{meshResolution} MESH · {stock.weight.toUpperCase()}</span>
       </div>

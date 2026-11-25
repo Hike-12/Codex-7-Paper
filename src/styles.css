@@ -77,6 +77,8 @@ button:disabled { cursor: default; }
 .control:disabled, .utility:disabled { opacity: .42; }
 .control.icon-button, .utility { width: 36px; padding: 0; }
 .material-button { min-width: 151px; justify-content: space-between; }
+.template-label { display: grid; gap: 2px; text-align: left; }
+.template-label small { color: var(--quiet); font-size: 10px; font-weight: 400; }
 .swatch { width: 14px; height: 14px; flex: 0 0 14px; border-radius: 3px; border: 1px solid #b7a6a26b; box-shadow: inset 0 0 4px #0003; }
 .share { color: #ffb19b; background: #382923; border-color: #684337; }
 .share:not(:disabled):hover { background: #523125; border-color: #a2614b; }
@@ -111,7 +113,6 @@ button:disabled { cursor: default; }
   letter-spacing: .12em;
 }
 .desk-caption i { width: 4px; height: 4px; background: #a36952; transform: rotate(45deg); }
-.desk-caption span { color: #837873; }
 .record-flag, .toast {
   position: absolute;
   z-index: 1;
@@ -192,9 +193,8 @@ button:disabled { cursor: default; }
   letter-spacing: .037em;
   color: #a49b94;
 }
-.readout p { margin: 0; color: #b9aca2; font: 11px/1.3 Inter, sans-serif; letter-spacing: 0; text-align: center; }
-.day-label b { font-weight: 500; color: var(--warm); }
-.mesh-label { justify-self: end; text-align: right; white-space: nowrap; }
+.readout p { grid-column: 2; margin: 0; color: #b9aca2; font: 11px/1.3 Inter, sans-serif; letter-spacing: 0; text-align: center; }
+.mesh-label { grid-column: 3; justify-self: end; text-align: right; white-space: nowrap; }
 .click-away { position: fixed; inset: 0; z-index: 3; border: 0; background: none; cursor: default; }
 
 .options {
@@ -310,6 +310,7 @@ button:disabled { cursor: default; }
   .brand { gap: 5px; }
   .topbar { padding-inline: 8px; }
   .actions { gap: 4px; }
+  .materials .control { gap: 5px; padding-inline: 7px; }
   .dock button { gap: 3px; font-size: 10px; }
   .dock button svg { width: 14px; }
 }

@@ -219,9 +219,6 @@ export class PaperTexture {
     ctx.fillText('FIG. A / FOLD', 663, 317)
     ctx.fillText(stock.name.toUpperCase(), 663, 391)
     ctx.fillText(stock.weight.toUpperCase(), 663, 409)
-    ctx.textAlign = 'right'
-    ctx.fillText('30 DAYS / 30 PROJECTS', 800, 497)
-    ctx.textAlign = 'left'
     ctx.fillStyle = stock.accent
     ctx.fillRect(61, 80, 32, 1.35)
     ctx.fillRect(663, 343, 15, 1.35)

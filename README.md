@@ -1,6 +1,6 @@
 # Tear Sheet
 
-Day 7 of 30 Days, 30 Projects. Tear Sheet is a browser workbench for setting type and working a sheet of paper. The desk, grain, fibers, and paper sounds are generated in the browser.
+Tear Sheet is a browser workbench for setting type and working a sheet of paper. The desk, grain, fibers, and paper sounds are generated in the browser.
 
 ## Run locally
 
@@ -23,7 +23,7 @@ npx tsc --noEmit
 | Type & stamp | `3` | Click the sheet to add type or click ink to edit it. Pick a stamp from the tool controls, then click the sheet to apply it. |
 | Crumple | `4` | Click the sheet or choose **Crumple sheet**. Grab and release the ball to throw it. **Iron out** flattens the sheet and keeps its tears. |
 
-The pin menu switches between top-edge pinning, unpinned Zero-G, and unpinned desk gravity. **Under-note** edits the print beneath the sheet. **Reset sheet** replaces the paper and keeps your ink. Use **Undo** or `Ctrl+Z` / `Cmd+Z` to reverse edits and gestures.
+Open **Templates** and choose a layout to start a new sheet. The pin menu switches between top-edge pinning, unpinned Zero-G, and unpinned desk gravity. **Under-note** edits the print beneath the sheet. **Reset sheet** replaces the paper and keeps your ink. Use **Undo** or `Ctrl+Z` / `Cmd+Z` to reverse edits and gestures.
 
 Mouse, pen, and touch all use Pointer Events. To set type without a pointer, select Type, focus the canvas, and press Enter to place an ink block at its center.
 
