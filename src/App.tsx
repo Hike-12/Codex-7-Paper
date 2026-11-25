@@ -1,24 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import { PaperPhysics } from './engine/PaperPhysics'
 import type { Gravity, Point } from './engine/PaperPhysics'
-import { PaperRenderer, meshResolution } from './engine/PaperRenderer'
+import { PaperRenderer } from './engine/PaperRenderer'
 import { PaperAudio } from './engine/PaperAudio'
 import { blockAt } from './engine/PaperTexture'
 import { createSheet, fonts, stamps, stocks, templates } from './engine/sheet'
-import type { InkBlock, InkFont, Sheet, Stock, Template } from './engine/sheet'
+import type { InkBlock, Sheet, Stock, Template } from './engine/sheet'
 import { exportPNG, readShare, recordClip, shareURL, videoType } from './utils/exportShare'
 import type { StudioState } from './utils/exportShare'
 
 const tools = [
   { key: 'peel', label: 'Peel', help: 'Drag a corner to lift the sheet. Double-click an edge for a quick peel.' },
   { key: 'rip', label: 'Rip', help: 'Drag the blade across the sheet. Cut past an edge to free a piece.' },
-  { key: 'type', label: 'Type & stamp', help: 'Click anywhere on the paper to set type, or click existing ink to edit it.' },
+  { key: 'type', label: 'Type & stamp', help: 'Choose Add text or click a spot on the sheet. Click existing text to edit it.' },
   { key: 'wad', label: 'Crumple', help: 'Click the sheet to crumple it. Drag and release to toss the ball.' },
 ] as const
 type Tool = typeof tools[number]['key']
-type Menu = 'stock' | 'template' | 'export' | 'gravity' | 'stamp' | undefined
+type Menu = 'stock' | 'template' | 'export' | 'gravity' | 'stamp' | 'ink' | 'face' | undefined
 type Runtime = { renderer: PaperRenderer; mesh: PaperPhysics; audio: PaperAudio }
 type Gesture = { pointer: number; tool: 'peel' | 'rip' | 'wad'; last: Point; before: StudioState; changed: boolean }
 const gravityNames: Record<Gravity, string> = { pins: 'Top edge pinned', zero: 'Unpin · Zero-G', desk: 'Unpin · Desk gravity' }
@@ -29,9 +29,46 @@ function startingState() {
 }
 
 function Options({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
-  return <div className={`options ${className}`} role="group" aria-label={label}>
+  const panel = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const element = panel.current!
+    const position = () => {
+      element.style.removeProperty('--menu-shift')
+      const { left, right } = element.getBoundingClientRect()
+      const inset = 12
+      const shift = Math.max(inset - left, Math.min(0, document.documentElement.clientWidth - inset - right))
+      element.style.setProperty('--menu-shift', `${shift}px`)
+    }
+    position()
+    window.addEventListener('resize', position)
+    return () => window.removeEventListener('resize', position)
+  }, [])
+
+  useEffect(() => {
+    const element = panel.current!
+    const active = element.querySelector<HTMLButtonElement>('.option[aria-pressed="true"]') ??
+      element.querySelector<HTMLButtonElement>('.option')
+    if (element.parentElement?.querySelector('button:focus-visible')) active?.focus()
+  }, [])
+
+  return <div ref={panel} className={`options ${className}`} role="group" aria-label={label} onKeyDown={event => {
+    if (event.key === 'Escape') {
+      panel.current?.parentElement?.querySelector('button')?.focus()
+      return
+    }
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+    if (!keys.includes(event.key)) return
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('.option:not(:disabled)'))
+    if (!buttons.length) return
+    event.preventDefault()
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 :
+      (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length
+    buttons[next].focus()
+  }}>
     <div className="menu-title">{label}</div>
-    {children}
+    <div className="option-list">{children}</div>
   </div>
 }
 
@@ -44,6 +81,7 @@ export function App() {
   const [sound, setSound] = useState(false)
   const [menu, setMenu] = useState<Menu>()
   const [editor, setEditor] = useState<InkBlock>()
+  const [placingText, setPlacingText] = useState(false)
   const [underNote, setUnderNote] = useState<string>()
   const [stamp, setStamp] = useState<string>()
   const [customStamp, setCustomStamp] = useState<string>()
@@ -62,6 +100,15 @@ export function App() {
   const capture = useRef(false)
   const messageTimer = useRef(0)
   const recordStart = useRef(0)
+
+  useEffect(() => {
+    if (!menu) return
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest(`[data-menu="${menu}"]`)) setMenu(undefined)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [menu])
 
   useEffect(() => {
     const element = canvas.current!
@@ -152,6 +199,7 @@ export function App() {
     setWadded(state.mesh.wadded)
     showSheet(state.sheet)
     setEditor(undefined)
+    setPlacingText(false)
     setStamp(undefined)
   }
 
@@ -182,12 +230,27 @@ export function App() {
     setTool(next)
     setMenu(undefined)
     setStamp(undefined)
+    setPlacingText(false)
     if (next !== 'type') setEditor(undefined)
   }
 
   function world(event: ReactPointerEvent<HTMLCanvasElement> | { clientX: number; clientY: number }) {
     const rect = canvas.current!.getBoundingClientRect()
     return runtime.current!.renderer.world({ x: event.clientX - rect.left, y: event.clientY - rect.top })
+  }
+
+  function addText() {
+    setMenu(undefined)
+    setStamp(undefined)
+    setPlacingText(value => !value)
+    canvas.current?.focus({ preventScroll: true })
+  }
+
+  function editInk(block: InkBlock) {
+    setMenu(undefined)
+    setPlacingText(false)
+    setStamp(undefined)
+    setEditor({ ...block })
   }
 
   function place(point: Point) {
@@ -205,8 +268,10 @@ export function App() {
       live.audio.stamp()
       return
     }
-    const existing = [...current.current.blocks].reverse().find(block => blockAt(block, u, v, live.renderer.texture.inkContext))
-    setEditor(existing ? { ...existing } : { id: crypto.randomUUID(), u, v: Math.max(0.035, v), font: 'Serif', size: 37, text: '' })
+    const existing = !placingText && [...current.current.blocks].reverse().find(block => blockAt(block, u, v, live.renderer.texture.inkContext))
+    if (existing) { editInk(existing); return }
+    setPlacingText(false)
+    setEditor({ id: crypto.randomUUID(), u, v: Math.max(0.035, v), font: 'Serif', size: 37, text: '' })
   }
 
   function foldIntoBall() {
@@ -233,7 +298,7 @@ export function App() {
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (!runtime.current || gesture.current || !event.isPrimary || event.button !== 0) return
+    if (!runtime.current || gesture.current || menu || !event.isPrimary || event.button !== 0) return
     const live = runtime.current
     const point = world(event)
     if (tool === 'type') { place(point); return }
@@ -388,10 +453,12 @@ export function App() {
   useEffect(() => {
     function keys(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        if (menu) { setMenu(undefined); return }
         setEditor(undefined); setUnderNote(undefined); setMenu(undefined); setCopyField(undefined); setCustomStamp(undefined)
+        setPlacingText(false)
         return
       }
-      if (event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return
+      if (menu || event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return
       if (event.metaKey || event.ctrlKey) {
         if (event.key.toLowerCase() === 'z' && !event.shiftKey) { event.preventDefault(); undo() }
         return
@@ -409,10 +476,13 @@ export function App() {
   })
 
   const stock = stocks[sheet.stock]
-  const press = matchMedia('(pointer: coarse)').matches ? 'Double-tap' : 'Double-click'
+  const touch = matchMedia('(pointer: coarse)').matches
+  const press = touch ? 'Double-tap' : 'Double-click'
+  const editMode = editor && sheet.blocks.some(block => block.id === editor.id)
   const help = wadded && (tool === 'wad' || tool === 'peel')
     ? 'Drag the ball and release to toss it. Iron it out to recover the sheet.'
     : stamp && tool === 'type' ? `Press the paper to apply “${stamp}”.`
+      : placingText ? `${touch ? 'Tap' : 'Click'} a spot on the sheet for your text.`
       : tool === 'peel' ? `Drag a corner to lift the sheet. ${press} an edge for a quick peel.`
         : tools.find(item => item.key === tool)!.help
 
@@ -423,7 +493,7 @@ export function App() {
         <div><h1>Tear Sheet<span>.</span></h1><div className="brand-caption">Paper workbench</div></div>
       </div>
       <div className="materials">
-        <div className="menu-anchor">
+        <div className="menu-anchor" data-menu="stock">
           <button className="control material-button" title="Paper stock" aria-expanded={menu === 'stock'} onClick={() => openMenu('stock')}>
             <span className="swatch" style={{ background: stock.base }} /><span className="material-label">{stock.name}</span><Icon name="chevron" size={13} />
           </button>
@@ -434,7 +504,7 @@ export function App() {
             }}><span className="swatch" style={{ background: item.base }} /><span>{item.name}</span><small>{item.weight}</small></button>
           )}</Options>}
         </div>
-        <div className="menu-anchor">
+        <div className="menu-anchor" data-menu="template">
           <button className="control" aria-label="Templates" aria-describedby="template-hint" aria-expanded={menu === 'template'} onClick={() => openMenu('template')}>
             <Icon name="template" /><span className="template-label">Templates<small id="template-hint">Start a new sheet</small></span><Icon name="chevron" size={13} />
           </button>
@@ -445,7 +515,7 @@ export function App() {
       </div>
       <div className="actions">
         <button className="control icon-button" title={sound ? 'Mute paper foley' : 'Unmute paper foley'} aria-label="Paper foley" aria-pressed={sound} onClick={() => void toggleSound()}><Icon name={sound ? 'audio' : 'mute'} /></button>
-        <div className="menu-anchor">
+        <div className="menu-anchor" data-menu="export">
           <button className="control action" title="Export PNG" aria-label="Export PNG" aria-expanded={menu === 'export'} onClick={() => openMenu('export')}><Icon name="download" /><span>PNG</span></button>
           {menu === 'export' && <Options label="Export 2× PNG" className="right-menu">
             <button className="option" onClick={() => void downloadPoster(true)}>Studio backdrop</button>
@@ -471,7 +541,7 @@ export function App() {
     <footer className="workbar">
       <div className="tool-row">
         <div className="desk-actions">
-          <div className="menu-anchor gravity-anchor">
+          <div className="menu-anchor gravity-anchor" data-menu="gravity">
             <button className="control gravity" aria-expanded={menu === 'gravity'} title={gravityNames[gravity]} onClick={() => openMenu('gravity')}><Icon name="pin" /><span>{gravityNames[gravity]}</span><Icon name="chevron" size={12} /></button>
             {menu === 'gravity' && <Options label="Sheet suspension" className="up-menu">{(Object.entries(gravityNames) as [Gravity, string][]).map(([value, label]) =>
               <button className="option" aria-pressed={gravity === value} key={value} onClick={() => {
@@ -490,12 +560,12 @@ export function App() {
           </button>)}
         </div>
         <div className="context-actions">
-          {tool === 'type' && <div className="menu-anchor">
+          {tool === 'type' && <div className="menu-anchor" data-menu="stamp">
             <button className={`control ${stamp ? 'active-control' : ''}`} aria-label="Choose a stamp" title="Choose a stamp" aria-expanded={menu === 'stamp'} onClick={() => openMenu('stamp')}><Icon name="stamp" /><span>{stamp || 'Stamp'}</span><Icon name="chevron" size={12} /></button>
             {menu === 'stamp' && <Options label="Ink stamps" className="up-menu right-menu">
               {[...stamps, new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: 'short', day: '2-digit' }).format(new Date()).toUpperCase()].map(item =>
-                <button className="option" key={item} onClick={() => { setStamp(item); setMenu(undefined); setEditor(undefined) }}>{item}</button>)}
-              <button className="option" onClick={() => { setCustomStamp(''); setMenu(undefined) }}>Custom stamp</button>
+                <button className="option" key={item} onClick={() => { setStamp(item); setPlacingText(false); setMenu(undefined); setEditor(undefined) }}>{item}</button>)}
+              <button className="option" onClick={() => { setCustomStamp(''); setPlacingText(false); setMenu(undefined) }}>Custom stamp</button>
               {stamp && <button className="option" onClick={() => { setStamp(undefined); setMenu(undefined) }}>Return to type</button>}
             </Options>}
           </div>}
@@ -504,23 +574,46 @@ export function App() {
         </div>
       </div>
       <div className="readout">
+        {tool === 'type' && <div className="type-controls">
+          <button className="control add-text" aria-pressed={placingText} onClick={addText}><Icon name="type" size={15} />Add text</button>
+          <div className="menu-anchor" data-menu="ink">
+            <button className="control" aria-expanded={menu === 'ink'} disabled={!sheet.blocks.length} onClick={() => openMenu('ink')}>
+              Edit text<Icon name="chevron" size={13} />
+            </button>
+            {menu === 'ink' && <Options label="Text on this sheet" className="up-menu">
+              {sheet.blocks.map(block => <button type="button" className="option ink-option" key={block.id} onClick={() => editInk(block)}>
+                <Icon name={block.stamp ? 'stamp' : 'type'} size={15} /><span>{block.text.replace(/\s+/g, ' ').trim()}</span>
+              </button>)}
+            </Options>}
+          </div>
+        </div>}
         <p>{help}</p>
-        <span className="mesh-label">{meshResolution} MESH · {stock.weight.toUpperCase()}</span>
       </div>
     </footer>
 
-    {menu && <button className="click-away" tabIndex={-1} aria-label="Close menu" onClick={() => setMenu(undefined)} />}
     {editor && <div className="shade" onPointerDown={event => { if (event.target === event.currentTarget) setEditor(undefined) }}>
-      <form className="panel" onSubmit={event => { event.preventDefault(); saveInk() }} aria-label="Edit ink">
-        <div className="panel-heading"><h2>{editor.stamp ? 'Edit stamp' : 'Set type'}</h2><button type="button" className="utility" aria-label="Close" onClick={() => setEditor(undefined)}><Icon name="close" /></button></div>
-        <label>Ink<textarea autoFocus value={editor.text} maxLength={280} rows={3} placeholder="Type something…" onChange={event => setEditor({ ...editor, text: event.target.value })} /></label>
+      <form className="panel" onSubmit={event => { event.preventDefault(); saveInk() }} aria-labelledby="ink-editor-title">
+        <div className="panel-heading"><h2 id="ink-editor-title">{editor.stamp ? 'Edit stamp' : editMode ? 'Edit text' : 'Add text'}</h2><button type="button" className="utility" aria-label="Close" onClick={() => { setEditor(undefined); setMenu(undefined) }}><Icon name="close" /></button></div>
+        <label>Text<textarea autoFocus value={editor.text} maxLength={280} rows={3} placeholder="Type your text here…" onChange={event => setEditor({ ...editor, text: event.target.value })} /></label>
         <div className="form-row">
-          {!editor.stamp && <label>Face<select value={editor.font} onChange={event => setEditor({ ...editor, font: event.target.value as InkFont })}>{fonts.map(font => <option key={font}>{font}</option>)}</select></label>}
+          {!editor.stamp && <div className="font-field">
+            <span id="font-label">Typeface</span>
+            <div className="menu-anchor font-picker" data-menu="face">
+              <button type="button" className="control" aria-labelledby="font-label font-value" aria-expanded={menu === 'face'} onClick={() => openMenu('face')}>
+                <span id="font-value" data-face={editor.font}>{editor.font}</span><Icon name="chevron" size={13} />
+              </button>
+              {menu === 'face' && <Options label="Typefaces" className="up-menu">
+                {fonts.map(font => <button type="button" className="option" data-face={font} key={font} aria-pressed={editor.font === font} onClick={() => {
+                  setEditor({ ...editor, font }); setMenu(undefined)
+                }}>{font}</button>)}
+              </Options>}
+            </div>
+          </div>}
           <label>Size <input type="number" value={editor.size} min={8} max={180} onChange={event => setEditor({ ...editor, size: Number(event.target.value) })} /></label>
         </div>
         <div className="form-actions">
-          {sheet.blocks.some(block => block.id === editor.id) && <button className="control" type="button" onClick={deleteInk}>Remove ink</button>}
-          <button className="control primary" type="submit" disabled={!editor.text.trim()}>Print on sheet</button>
+          {editMode && <button className="control" type="button" onClick={deleteInk}>Remove text</button>}
+          <button className="control primary" type="submit" disabled={!editor.text.trim()}>{editMode ? 'Save changes' : 'Add to sheet'}</button>
         </div>
       </form>
     </div>}

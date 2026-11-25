@@ -21,6 +21,6 @@ const lines = {
 } as const
 
 export function Icon({ name, size = 17 }: { name: keyof typeof lines; size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45"
+  return <svg data-icon={name} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={lines[name]} /></svg>
 }

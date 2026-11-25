@@ -1,4 +1,4 @@
-import { COLS, ROWS, PAPER_H, PAPER_W, NODE_COUNT, project } from './PaperPhysics'
+import { PAPER_H, PAPER_W, NODE_COUNT, project } from './PaperPhysics'
 import type { PaperPhysics, Point } from './PaperPhysics'
 import { makeCanvas, PaperTexture, seeded } from './PaperTexture'
 import { stocks } from './sheet'
@@ -519,5 +519,3 @@ export class PaperRenderer {
     this.layer.canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext()
   }
 }
-
-export const meshResolution = `${COLS} × ${ROWS}`

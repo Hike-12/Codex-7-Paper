@@ -20,7 +20,7 @@ npx tsc --noEmit
 | --- | --- | --- |
 | Peel | `1` | Drag a point on the sheet. An edge drag turns up a fold and exposes the sheet below it. Double-click near a corner to preview a curl. |
 | Rip | `2` | Drag across the sheet. To free a piece, cut through to another cut or past an outside edge. |
-| Type & stamp | `3` | Click the sheet to add type or click ink to edit it. Pick a stamp from the tool controls, then click the sheet to apply it. |
+| Type & stamp | `3` | Choose **Add text** and click a spot on the sheet, or click a blank spot directly. To revise existing text, click it on the sheet or choose it from **Edit text**. Pick a stamp from the tool controls, then click the sheet to apply it. |
 | Crumple | `4` | Click the sheet or choose **Crumple sheet**. Grab and release the ball to throw it. **Iron out** flattens the sheet and keeps its tears. |
 
 Open **Templates** and choose a layout to start a new sheet. The pin menu switches between top-edge pinning, unpinned Zero-G, and unpinned desk gravity. **Under-note** edits the print beneath the sheet. **Reset sheet** replaces the paper and keeps your ink. Use **Undo** or `Ctrl+Z` / `Cmd+Z` to reverse edits and gestures.
