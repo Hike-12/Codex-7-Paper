@@ -57,6 +57,7 @@ export function App() {
   const runtime = useRef<Runtime>(null)
   const current = useRef(sheet)
   const gesture = useRef<Gesture>(undefined)
+  const lastTouchTap = useRef<{ at: number; point: Point }>(undefined)
   const history = useRef<StudioState[]>([])
   const capture = useRef(false)
   const messageTimer = useRef(0)
@@ -100,7 +101,8 @@ export function App() {
       remainder = Math.min(step * 3, remainder + Math.max(0, (time - (then || time)) / 1000))
       then = time
       while (remainder >= step) {
-        mesh.step(step, renderer.bounds)
+        const snapped = mesh.step(step, renderer.bounds)
+        if (snapped) audio.rip(13 + snapped * 1.2, snapped)
         remainder -= step
       }
       renderer.render(capture.current)
@@ -283,6 +285,14 @@ export function App() {
     live?.mesh.release()
     live?.audio.slide(0)
     live?.renderer.requestFrame()
+    if (active.tool === 'peel' && !active.changed && event.pointerType === 'touch' && event.type === 'pointerup') {
+      const now = performance.now()
+      const previous = lastTouchTap.current
+      if (previous && now - previous.at < 340 && Math.hypot(previous.point.x - active.last.x, previous.point.y - active.last.y) < 36) {
+        previewCorner(event)
+        lastTouchTap.current = undefined
+      } else lastTouchTap.current = { at: now, point: active.last }
+    }
   }
 
   function previewCorner(event: { clientX: number; clientY: number }) {
@@ -399,9 +409,12 @@ export function App() {
   })
 
   const stock = stocks[sheet.stock]
+  const press = matchMedia('(pointer: coarse)').matches ? 'Double-tap' : 'Double-click'
   const help = wadded && (tool === 'wad' || tool === 'peel')
     ? 'Drag the ball and release to toss it. Iron it out to recover the sheet.'
-    : stamp && tool === 'type' ? `Click the paper to apply “${stamp}”.` : tools.find(item => item.key === tool)!.help
+    : stamp && tool === 'type' ? `Press the paper to apply “${stamp}”.`
+      : tool === 'peel' ? `Drag a corner to lift the sheet. ${press} an edge for a quick peel.`
+        : tools.find(item => item.key === tool)!.help
 
   return <main className="studio">
     <header className="topbar">

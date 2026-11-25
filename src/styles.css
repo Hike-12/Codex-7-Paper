@@ -173,6 +173,7 @@ button:disabled { cursor: default; }
   transition: color .18s var(--snap), border-color .18s var(--snap), background .18s var(--snap);
 }
 .dock button:hover { color: #fff8eb; background: #2e2829; }
+.dock button svg { flex-shrink: 0; }
 .dock button[aria-pressed="true"] {
   border-color: #694538;
   background: #3b2924;
@@ -293,7 +294,7 @@ button:disabled { cursor: default; }
   .workbar { padding: 7px 10px 9px; }
   .tool-row { grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 7px; }
   .dock { grid-column: 1 / -1; grid-row: 1; justify-content: stretch; width: 100%; }
-  .dock button { min-width: 0; flex: 1; padding: 0 3px; font-size: 11px; gap: 4px; }
+  .dock button { min-width: 0; flex: 1 0 auto; padding: 0 3px; font-size: 11px; gap: 4px; }
   .dock button svg { width: 16px; height: 16px; }
   .dock kbd { display: none; }
   .desk-actions { grid-row: 2; }

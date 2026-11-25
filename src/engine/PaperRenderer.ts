@@ -18,6 +18,7 @@ layout(location=2) in vec3 smoothNormal;
 uniform vec4 view;
 uniform vec2 lens;
 uniform float shadow;
+uniform float wadded;
 out vec3 vPosition;
 out vec2 vUV;
 out vec3 vNormal;
@@ -25,8 +26,9 @@ void main() {
   vPosition = position;
   vUV = uv;
   vNormal = smoothNormal;
+  vec2 lamp = mix(vec2(0.23, 0.49), vec2(0.095, 0.145), wadded);
   vec2 p = shadow > 0.0
-    ? position.xy + vec2(3.0, 7.0) + position.z * vec2(0.23, 0.49) + lens
+    ? position.xy + vec2(3.0, 7.0) + position.z * lamp + lens
     : position.xy + position.z * vec2(0.13, -0.24);
   vec2 rotated = mat2(0.9989877, -0.0449848, 0.0449848, 0.9989877) * p;
   vec2 clip = rotated * view.xy + view.zw;
@@ -64,7 +66,8 @@ void main() {
   lit += relief * grazing * vec3(0.157, 0.138, 0.110);
   if (gl_FrontFacing) {
     float grey = dot(ink, vec3(0.33, 0.43, 0.24));
-    lit = mix(lit * 0.45, vec3(grey * 0.48 + 0.1, grey * 0.45 + 0.092, grey * 0.43 + 0.078), 0.66);
+    float bounce = 0.09 + max(0.0, diffuse) * 0.074;
+    lit = mix(lit * 0.48, vec3(grey * 0.48 + bounce, grey * 0.45 + bounce * 0.91, grey * 0.43 + bounce * 0.82), 0.66);
   }
   float coverage = opacity + (1.0 - opacity) * (1.0 - smoothstep(0.17, 0.61, dot(ink, vec3(0.333))));
   color = vec4(clamp(lit, 0.0, 1.0), coverage);
@@ -92,7 +95,7 @@ function createProgram(gl: WebGL2RenderingContext) {
 
 class MeshLayer {
   readonly canvas = makeCanvas(1, 1)
-  private gl = this.canvas.getContext('webgl2', { alpha: true, antialias: true, preserveDrawingBuffer: true })
+  private gl = this.canvas.getContext('webgl2', { alpha: true, antialias: true, stencil: true, preserveDrawingBuffer: true })
   private program: WebGLProgram | null = null
   private vertexBuffer: WebGLBuffer | null = null
   private indexBuffer: WebGLBuffer | null = null
@@ -244,11 +247,16 @@ class MeshLayer {
     gl.uniform1f(this.uniforms.wadded, Number(this.mesh.wadded))
     if (shadows) {
       gl.disable(gl.DEPTH_TEST)
-      for (const [x, y, alpha] of [[-4, 2, 0.14], [6, 7, 0.17], [2, 12, 0.16], [0, 0, 0.42]]) {
+      gl.enable(gl.STENCIL_TEST)
+      gl.stencilFunc(gl.EQUAL, 0, 0xff)
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR)
+      for (const [x, y, alpha] of [[-4, 2, 0.12], [6, 7, 0.14], [2, 12, 0.15], [0, 0, 0.37]]) {
+        gl.clear(gl.STENCIL_BUFFER_BIT)
         gl.uniform2f(this.uniforms.lens, x, y)
         gl.uniform1f(this.uniforms.shadow, alpha)
         gl.drawElements(gl.TRIANGLES, this.indices.length, gl.UNSIGNED_SHORT, 0)
       }
+      gl.disable(gl.STENCIL_TEST)
     }
     gl.enable(gl.DEPTH_TEST)
     gl.uniform1f(this.uniforms.shadow, 0)

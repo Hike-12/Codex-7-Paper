@@ -400,14 +400,14 @@ export class PaperPhysics {
         this.stepWad(bounds)
         this.settling--
       }
-      return
+      return 0
     }
     const cut = this.topology > 0 && this.triangles.some(t => t.dead)
     const active = !!this.grab || this.settling > 0 || this.ironing > 0 ||
       (cut && (this.flutter || this.nodes.some(n => !n.attached && this.gravity !== 'zero' && n.p[1] < 1100))) ||
       (this.gravity === 'desk' && this.nodes.some(n => n.p[1] < 1100))
     this.moving = active
-    if (!active) return
+    if (!active) return 0
     this.settling--
     const iron = this.ironing > 0
     if (iron) this.ironing--
@@ -432,7 +432,7 @@ export class PaperPhysics {
       n.old[0] = x; n.old[1] = y; n.old[2] = z
     }
     this.fold()
-    let snapped = false
+    let snapped = 0
     for (let pass = 0; pass < 3; pass++) {
       for (const edge of this.edges) {
         if (!this.edgeCount(edge)) continue
@@ -440,8 +440,11 @@ export class PaperPhysics {
         const b = this.nodes[edge.b]
         const anchor = this.grab?.id
         if (pass === 0 && anchor !== undefined && length(a.p, b.p) > edge.length * 2.2) {
-          for (const id of edge.triangles) this.triangles[id].dead = true
-          snapped = true
+          for (const id of edge.triangles) {
+            if (this.triangles[id].dead) continue
+            this.triangles[id].dead = true
+            snapped++
+          }
         } else {
           this.solve(a, b, edge.length, this.grab ? 0.66 : 0.81)
         }
@@ -452,5 +455,6 @@ export class PaperPhysics {
       }
     }
     if (snapped) { this.topology++; this.attach() }
+    return snapped
   }
 }

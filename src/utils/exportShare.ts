@@ -127,26 +127,46 @@ export function videoType() {
 export function recordClip(canvas: HTMLCanvasElement, type: string, audio?: MediaStream) {
   const stream = canvas.captureStream(60)
   audio?.getAudioTracks().forEach(track => stream.addTrack(track))
-  const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8_000_000 })
   const chunks: Blob[] = []
+  let started = 0
+  let stopped = 0
   let timer = 0
   const stopTracks = () => stream.getTracks().forEach(track => track.stop())
   return new Promise<void>((resolve, reject) => {
+    let recorder: MediaRecorder
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8_000_000 })
+    } catch (error) {
+      stopTracks()
+      reject(error)
+      return
+    }
     recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data) }
     recorder.onerror = () => {
       window.clearTimeout(timer)
       stopTracks()
       reject(new Error('Recording could not finish'))
     }
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
+      const duration = (stopped || performance.now()) - started
+      window.clearTimeout(timer)
       stopTracks()
       if (chunks.length === 0) { reject(new Error('The clip is empty')); return }
-      download(new Blob(chunks, { type: 'video/webm' }), 'tear-sheet-5s.webm')
+      const source = new Blob(chunks, { type: 'video/webm' })
+      const clip = await import('@fix-webm-duration/fix')
+        .then(({ fixWebmDuration }) => fixWebmDuration(source, duration, { logger: false }))
+        .catch(() => source)
+      download(clip, 'tear-sheet-5s.webm')
       resolve()
     }
     try {
-      recorder.start(100)
-      timer = window.setTimeout(() => { if (recorder.state === 'recording') recorder.stop() }, 5000)
+      recorder.start()
+      started = performance.now()
+      timer = window.setTimeout(() => {
+        if (recorder.state !== 'recording') return
+        stopped = performance.now()
+        recorder.stop()
+      }, 5000)
     } catch (error) {
       stopTracks()
       reject(error)

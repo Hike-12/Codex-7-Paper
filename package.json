@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fix-webm-duration/fix": "^1.0.1",
+    "lz-string": "^1.5.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "lz-string": "^1.5.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
